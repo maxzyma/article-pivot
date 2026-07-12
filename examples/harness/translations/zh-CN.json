@@ -3,6 +3,7 @@
   "source_revision": "sha256:harness-fixture",
   "engine": "fixture",
   "prompt_version": "fixture.v1",
+  "title": "面向自我改进的 Harness 工程",
   "segments": {
     "heading-context": {
       "status": "translated",

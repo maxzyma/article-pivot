@@ -61,6 +61,8 @@ def validate_document(
     if overlay is not None:
         if overlay.source_revision != document.revision.get("source_hash"):
             issues.append(ValidationIssue("translation.revision", "overlay source revision mismatch"))
+        if not overlay.title.strip():
+            issues.append(ValidationIssue("translation.title", "translated title is required"))
         unknown = set(overlay.segments) - block_ids
         for block_id in sorted(unknown):
             issues.append(ValidationIssue("translation.unknown_block", "unknown block id", block_id))
@@ -72,4 +74,8 @@ def validate_document(
         missing = translatable - set(overlay.segments)
         for block_id in sorted(missing):
             issues.append(ValidationIssue("translation.missing_block", "missing translated block", block_id))
+        for block_id in sorted(translatable & set(overlay.segments)):
+            segment = overlay.segments[block_id]
+            if segment.status != "translated" or not segment.inlines:
+                issues.append(ValidationIssue("translation.incomplete_block", "translation is incomplete", block_id))
     return ValidationReport(tuple(issues))

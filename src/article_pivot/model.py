@@ -145,6 +145,7 @@ class TranslationOverlay:
     segments: dict[str, TranslationSegment]
     engine: str = ""
     prompt_version: str = ""
+    title: str = ""
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "TranslationOverlay":
@@ -153,6 +154,7 @@ class TranslationOverlay:
             source_revision=value["source_revision"],
             engine=value.get("engine", ""),
             prompt_version=value.get("prompt_version", ""),
+            title=value.get("title", ""),
             segments={
                 block_id: TranslationSegment.from_dict(block_id, segment)
                 for block_id, segment in value.get("segments", {}).items()
@@ -165,8 +167,8 @@ class TranslationOverlay:
             "source_revision": self.source_revision,
             "engine": self.engine,
             "prompt_version": self.prompt_version,
+            "title": self.title,
             "segments": {
                 block_id: segment.to_dict() for block_id, segment in self.segments.items()
             },
         }
-

@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from .model import CanonicalDocument, TranslationOverlay
+from .model import CanonicalDocument, TranslationOverlay, TranslationSegment
 
 
 @dataclass(frozen=True)
@@ -33,3 +33,39 @@ class CanonicalPackage:
             return None
         return self.translations.get(locale)
 
+    def initialize_translation(self, locale: str) -> Path:
+        translation_dir = self.root / "translations"
+        translation_dir.mkdir(exist_ok=True)
+        path = translation_dir / f"{locale}.json"
+        if path.exists():
+            raise FileExistsError(f"translation overlay already exists: {path}")
+        translatable = {
+            block.id: TranslationSegment(block_id=block.id, inlines=(), status="pending")
+            for block in self.document.all_blocks()
+            if block.type in {"heading", "paragraph", "list_item"}
+        }
+        overlay = TranslationOverlay(
+            locale=locale,
+            source_revision=self.document.revision["source_hash"],
+            segments=translatable,
+        )
+        path.write_text(json.dumps(overlay.to_dict(), ensure_ascii=False, indent=2) + "\n")
+        return path
+
+    @classmethod
+    def write(
+        cls,
+        root: str | Path,
+        document: CanonicalDocument,
+        raw_html: str = "",
+    ) -> "CanonicalPackage":
+        root_path = Path(root).resolve()
+        root_path.mkdir(parents=True, exist_ok=True)
+        (root_path / "canonical.json").write_text(
+            json.dumps(document.to_dict(), ensure_ascii=False, indent=2) + "\n"
+        )
+        if raw_html:
+            raw_dir = root_path / "raw"
+            raw_dir.mkdir(exist_ok=True)
+            (raw_dir / "source.html").write_text(raw_html)
+        return cls(root=root_path, document=document, translations={})

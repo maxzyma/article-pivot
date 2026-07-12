@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "maxzyma" }]
-dependencies = []
+dependencies = ["beautifulsoup4>=4.12,<5"]
 
 [project.scripts]
 article-pivot = "article_pivot.cli:main"
@@ -20,4 +20,3 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-

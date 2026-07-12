@@ -49,6 +49,20 @@ def _render_block(block: Block, heading_offset: int, in_quote: bool = False) -> 
         return f"$$\n{block.attrs['latex']}\n$$"
     if block.type == "image":
         return f"![{block.attrs.get('alt', '')}]({block.attrs.get('url', '')})"
+    if block.type == "table":
+        headers = [str(value) for value in block.attrs.get("headers", [])]
+        rows = [[str(value) for value in row] for row in block.attrs.get("rows", [])]
+        if not headers and rows:
+            headers = ["" for _ in rows[0]]
+        if not headers:
+            return ""
+        escape = lambda value: value.replace("|", "\\|").replace("\n", "<br />")
+        output = [
+            "| " + " | ".join(escape(value) for value in headers) + " |",
+            "| " + " | ".join("---" for _ in headers) + " |",
+        ]
+        output.extend("| " + " | ".join(escape(value) for value in row) + " |" for row in rows)
+        return "\n".join(output)
     if block.type == "list":
         ordered = bool(block.attrs.get("ordered"))
         lines = []
@@ -81,9 +95,11 @@ def render_bilingual_markdown(
 ) -> str:
     overlay = package.translation(locale)
     validate_document(package.document, overlay).require_ok()
-    parts = [f"# {package.document.title}"]
-    if package.document.title_en:
-        parts.append(_quote(package.document.title_en))
+    title = overlay.title if overlay and overlay.title else package.document.title
+    original_title = package.document.title_en or package.document.title
+    parts = [f"# {title}"]
+    if overlay and title != original_title:
+        parts.append(_quote(original_title))
     for block in package.document.blocks:
         has_translation = overlay and any(item.id in overlay.segments for item in block.walk())
         if has_translation and block.type not in {"code", "math", "image", "divider"}:
@@ -100,4 +116,19 @@ def render_bilingual_markdown(
                 parts.append(_quote(original))
         else:
             parts.append(_render_block(block, heading_offset))
+    return "\n\n".join(part for part in parts if part).rstrip() + "\n"
+
+
+def render_source_markdown(package: CanonicalPackage, heading_offset: int = 1) -> str:
+    validate_document(package.document).require_ok()
+    source = package.document.source
+    published = str(source.get("published_at", ""))[:10]
+    parts = [
+        f"# {package.document.title}",
+        _quote(
+            f"来源：Lil'Log / {source.get('author', 'Lilian Weng')}，{published}\n"
+            f"原文链接：{source.get('canonical_url', '')}"
+        ),
+    ]
+    parts.extend(_render_block(block, heading_offset) for block in package.document.blocks)
     return "\n\n".join(part for part in parts if part).rstrip() + "\n"

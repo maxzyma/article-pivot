@@ -14,6 +14,8 @@ and private automation owns credentials, schedules, routing, and runtime state.
 - Structural validation for headings, code, math, links, and translations.
 - Chinese-first bilingual Markdown rendering.
 - Dry-run-first archive adapter for `trending-diggest` repositories.
+- RSS discovery and canonical extraction for new Lilian Weng posts.
+- Dated notes archive planning with overwrite protection.
 - Contract and regression tests for historical formatting failures.
 
 The first release does not replace existing production schedulers. Migration is
@@ -49,6 +51,27 @@ article-pivot archive-trending \
 
 Remove `--dry-run` only after reviewing the plan. Archive operations never
 commit or push implicitly.
+
+Process a new Lilian Weng post:
+
+```bash
+article-pivot discover-lilian --known-url <already-processed-url>
+article-pivot fetch-lilian <post-url> --output /path/to/package
+article-pivot init-translation /path/to/package --locale zh-CN
+article-pivot validate /path/to/package --locale zh-CN
+article-pivot archive-notes /path/to/package \
+  --repo /path/to/notes-repo \
+  --locale zh-CN \
+  --dry-run
+```
+
+`init-translation` deliberately creates pending segments. A translator must
+fill every segment and the translated title before validation and rendering.
+The notes adapter refuses to overwrite an existing article directory.
+
+New Lilian Weng posts use this flow. Claude Blog remains on its legacy
+`claude-blog-digest` producer until that source completes separate migration
+gates; these commands do not change its scheduler or production writer.
 
 ## Repository boundary
 

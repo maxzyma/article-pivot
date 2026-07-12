@@ -100,7 +100,7 @@ class TrendingDigestArchiveAdapter:
                 f"title_en: {_yaml_string(document.title_en)}",
                 f"published_at: {_yaml_string(published_date.isoformat())}",
                 "format: \"bilingual-paragraph-zh-first\"",
-                "generator: \"article-pipeline@0.1.0\"",
+                "generator: \"article-pivot@0.1.0\"",
                 "---",
                 "",
             ]
@@ -144,7 +144,7 @@ class TrendingDigestArchiveAdapter:
             "source_revision": document.revision["source_hash"],
             "archive_path": str(relative_post),
             "published_at": published_date.isoformat(),
-            "generator_version": "article-pipeline@0.1.0",
+            "generator_version": "article-pivot@0.1.0",
         }
         post_path = self.repo / relative_post
         if post_path.is_file():

@@ -1,6 +1,6 @@
-# Article Pipeline
+# Article Pivot
 
-Article Pipeline is a reusable library and CLI for converting source articles
+Article Pivot is a reusable library and CLI for converting source articles
 into versioned canonical documents and target-specific archive or publication
 artifacts.
 
@@ -21,7 +21,7 @@ expected to use parallel dry-runs before publishing ownership is switched.
 
 ## 安装
 
-Article Pipeline currently requires Python 3.11 or newer. Install the local
+Article Pivot currently requires Python 3.11 or newer. Install the local
 checkout in editable mode while the public API is stabilizing:
 
 ```bash
@@ -33,14 +33,14 @@ python3 -m pip install -e .
 Validate and render a canonical package:
 
 ```bash
-article-pipeline validate examples/harness
-article-pipeline render examples/harness --output /tmp/article.md
+article-pivot validate examples/harness
+article-pivot render examples/harness --output /tmp/article.md
 ```
 
 Plan an archive write without mutating the target repository:
 
 ```bash
-article-pipeline archive-trending \
+article-pivot archive-trending \
   examples/harness \
   --repo /path/to/trending-diggest \
   --source claude-blog \

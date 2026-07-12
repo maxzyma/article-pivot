@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/maxzyma/article-pipeline/schemas/archive-manifest.v1.schema.json",
+  "$id": "https://github.com/maxzyma/article-pivot/schemas/archive-manifest.v1.schema.json",
   "title": "Public Archive Manifest",
   "type": "object",
   "required": ["schema_version", "documents"],

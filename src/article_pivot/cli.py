@@ -11,7 +11,7 @@ from .validation import validate_document
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="article-pipeline")
+    parser = argparse.ArgumentParser(prog="article-pivot")
     commands = parser.add_subparsers(dest="command", required=True)
 
     validate = commands.add_parser("validate", help="validate a canonical package")

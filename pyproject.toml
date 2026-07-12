@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "article-pipeline"
+name = "article-pivot"
 version = "0.1.0"
 description = "Reusable article extraction, translation, archiving, and publishing pipeline"
 readme = "README.md"
@@ -13,7 +13,7 @@ authors = [{ name = "maxzyma" }]
 dependencies = []
 
 [project.scripts]
-article-pipeline = "article_pipeline.cli:main"
+article-pivot = "article_pivot.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

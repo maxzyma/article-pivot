@@ -2,7 +2,7 @@
 
 ## Boundaries
 
-Article Pipeline separates five implementation boundaries:
+Article Pivot separates five implementation boundaries:
 
 1. The content core owns versioned canonical documents, translation overlays,
    deterministic rendering, and validation.
@@ -31,7 +31,7 @@ cross-target source of truth.
 
 ## Repository roles
 
-- `article-pipeline`: reusable processing and adapter contracts.
+- `article-pivot`: reusable processing and adapter contracts.
 - agent skill layer: thin agent interaction guidance.
 - private automation workspace: scheduler and control plane.
 - `trending-diggest`: public archive and reading site.

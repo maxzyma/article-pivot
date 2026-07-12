@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/maxzyma/article-pipeline/schemas/article.v1.schema.json",
+  "$id": "https://github.com/maxzyma/article-pivot/schemas/article.v1.schema.json",
   "title": "Canonical Article",
   "type": "object",
   "required": ["schema_version", "document_id", "source", "revision", "content"],

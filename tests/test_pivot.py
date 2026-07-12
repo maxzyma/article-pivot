@@ -5,17 +5,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from article_pipeline.adapters.archive import TrendingDigestArchiveAdapter
-from article_pipeline.package import CanonicalPackage
-from article_pipeline.renderers import render_bilingual_markdown
-from article_pipeline.validation import validate_document
+from article_pivot.adapters.archive import TrendingDigestArchiveAdapter
+from article_pivot.package import CanonicalPackage
+from article_pivot.renderers import render_bilingual_markdown
+from article_pivot.validation import validate_document
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "examples" / "harness"
 
 
-class PipelineRegressionTests(unittest.TestCase):
+class PivotRegressionTests(unittest.TestCase):
     def setUp(self):
         self.package = CanonicalPackage.load(FIXTURE)
 

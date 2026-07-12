@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxzyma/article-pipeline/schemas/article.v1.schema.json",
+  "title": "Canonical Article",
+  "type": "object",
+  "required": ["schema_version", "document_id", "source", "revision", "content"],
+  "properties": {
+    "schema_version": {"const": "article.v1"},
+    "document_id": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "required": ["canonical_url", "published_at"],
+      "properties": {
+        "canonical_url": {"type": "string", "format": "uri"},
+        "published_at": {"type": "string"},
+        "updated_at": {"type": ["string", "null"]},
+        "source_timezone": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "revision": {
+      "type": "object",
+      "required": ["source_hash"],
+      "properties": {
+        "source_hash": {"type": "string", "minLength": 1},
+        "fetched_at": {"type": "string"},
+        "parser_version": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "content": {
+      "type": "object",
+      "required": ["title", "blocks"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "title_en": {"type": "string"},
+        "summary": {"type": "string"},
+        "blocks": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/block"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {"type": "object"},
+    "assets": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "inline": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"type": "string", "minLength": 1},
+        "text": {"type": "string"},
+        "attrs": {"type": "object"},
+        "children": {"type": "array", "items": {"$ref": "#/$defs/inline"}}
+      },
+      "additionalProperties": false
+    },
+    "block": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "inlines": {"type": "array", "items": {"$ref": "#/$defs/inline"}},
+        "attrs": {"type": "object"},
+        "children": {"type": "array", "items": {"$ref": "#/$defs/block"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}
+

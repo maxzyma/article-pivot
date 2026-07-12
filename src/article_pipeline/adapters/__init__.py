@@ -1,0 +1,2 @@
+"""Adapter contracts and implementations."""
+

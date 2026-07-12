@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxzyma/article-pipeline/schemas/archive-manifest.v1.schema.json",
+  "title": "Public Archive Manifest",
+  "type": "object",
+  "required": ["schema_version", "documents"],
+  "properties": {
+    "schema_version": {"const": "archive-manifest.v1"},
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["document_id", "source_url", "source_revision", "archive_path", "published_at", "generator_version"],
+        "properties": {
+          "document_id": {"type": "string", "minLength": 1},
+          "source_url": {"type": "string", "format": "uri"},
+          "source_revision": {"type": "string", "minLength": 1},
+          "archive_path": {"type": "string", "minLength": 1},
+          "published_at": {"type": "string"},
+          "generator_version": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+

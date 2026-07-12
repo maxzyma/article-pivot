@@ -1,0 +1,66 @@
+{
+  "schema_version": "article.v1",
+  "document_id": "lilian-weng:harness-engineering-for-self-improvement",
+  "source": {
+    "canonical_url": "https://lilianweng.github.io/posts/2026-07-04-harness/",
+    "site": "lilian-weng",
+    "author": "Lilian Weng",
+    "published_at": "2026-07-04T00:00:00-07:00",
+    "source_timezone": "America/Los_Angeles"
+  },
+  "revision": {
+    "source_hash": "sha256:harness-fixture",
+    "fetched_at": "2026-07-10T00:00:00Z",
+    "parser_version": "fixture.v1"
+  },
+  "content": {
+    "title": "面向自我改进的 Harness 工程",
+    "title_en": "Harness Engineering for Self-Improvement",
+    "summary": "用于回归测试的最小文章。",
+    "blocks": [
+      {
+        "id": "heading-context",
+        "type": "heading",
+        "attrs": {"level": 1, "semantic_role": "source_section"},
+        "inlines": [{"type": "text", "text": "Context Engineering"}]
+      },
+      {
+        "id": "paragraph-mce",
+        "type": "paragraph",
+        "inlines": [
+          {"type": "text", "text": "An MCE skill "},
+          {"type": "inline_math", "text": "s \\in \\mathcal{S}"},
+          {"type": "text", "text": " defines a context function."}
+        ]
+      },
+      {
+        "id": "code-bibtex",
+        "type": "code",
+        "attrs": {
+          "language": "bibtex",
+          "code": "@article{weng2026harness,\n  title = {Harness Engineering for Self-Improvement}\n}"
+        }
+      },
+      {
+        "id": "list-risks",
+        "type": "list",
+        "attrs": {"ordered": false},
+        "children": [
+          {
+            "id": "risk-memory",
+            "type": "list_item",
+            "inlines": [{"type": "text", "text": "Memory and context degradation."}]
+          },
+          {
+            "id": "risk-evaluator",
+            "type": "list_item",
+            "inlines": [{"type": "text", "text": "Weak and fuzzy evaluators."}]
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {"slug": "harness-engineering-for-self-improvement"},
+  "assets": []
+}
+

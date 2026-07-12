@@ -1,0 +1,28 @@
+{
+  "locale": "zh-CN",
+  "source_revision": "sha256:harness-fixture",
+  "engine": "fixture",
+  "prompt_version": "fixture.v1",
+  "segments": {
+    "heading-context": {
+      "status": "translated",
+      "inlines": [{"type": "text", "text": "上下文工程"}]
+    },
+    "paragraph-mce": {
+      "status": "translated",
+      "inlines": [
+        {"type": "text", "text": "一个 MCE 技能 "},
+        {"type": "inline_math", "text": "s \\in \\mathcal{S}"},
+        {"type": "text", "text": " 定义了上下文函数。"}
+      ]
+    },
+    "risk-memory": {
+      "status": "translated",
+      "inlines": [{"type": "text", "text": "记忆与上下文退化。"}]
+    },
+    "risk-evaluator": {
+      "status": "translated",
+      "inlines": [{"type": "text", "text": "薄弱且模糊的评估器。"}]
+    }
+  }
+}

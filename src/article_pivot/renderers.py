@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .model import Block, InlineNode, TranslationOverlay
 from .package import CanonicalPackage
+from .publication import PublicationDocument, build_publication_document
 from .validation import validate_document
 
 
@@ -88,11 +89,63 @@ def _apply_overlay(block: Block, overlay: TranslationOverlay) -> Block:
     )
 
 
+def _render_publication_entry(original: Block, translated: Block | None) -> list[str]:
+    if translated is None or original.type in {"code", "math", "image", "divider"}:
+        return [_render_block(original, 2)]
+    translated_text = _render_block(translated, 2)
+    original_text = _render_block(original, 2)
+    if original.type == "heading":
+        return [translated_text, _quote(render_inlines(original.inlines))]
+    if original.type == "list":
+        quoted = "\n".join(
+            f"> • {line.split(' ', 1)[1]}" if " " in line else f"> • {line}"
+            for line in original_text.splitlines()
+        )
+        return [translated_text, quoted]
+    return [translated_text, _quote(original_text)]
+
+
+def render_publication_markdown(publication: PublicationDocument) -> str:
+    metadata = _quote(
+        f"来源：{publication.source_label}，{publication.published_date}\n"
+        f"原文链接：{publication.source_url}\n"
+        f"分类：{publication.category}"
+    )
+    parts = [
+        f"# {publication.title}",
+        _quote(publication.original_title),
+        metadata,
+        "## 核心要点",
+        "\n".join(f"- {point}" for point in publication.key_points),
+        "## 正文",
+    ]
+    for entry in publication.body:
+        parts.extend(_render_publication_entry(entry.original, entry.translated))
+    parts.extend(
+        [
+            "## 术语对照",
+            "| 英文 | 中文 | 说明 |\n|---|---|---|\n"
+            + "\n".join(
+                "| "
+                + " | ".join(
+                    value.replace("|", "\\|").replace("\n", " ")
+                    for value in (item.term, item.translation, item.note)
+                )
+                + " |"
+                for item in publication.glossary
+            ),
+        ]
+    )
+    return "\n\n".join(part for part in parts if part).rstrip() + "\n"
+
+
 def render_bilingual_markdown(
     package: CanonicalPackage,
     locale: str = "zh-CN",
     heading_offset: int = 1,
 ) -> str:
+    if package.editorial(locale):
+        return render_publication_markdown(build_publication_document(package, locale))
     overlay = package.translation(locale)
     validate_document(package.document, overlay).require_ok()
     title = overlay.title if overlay and overlay.title else package.document.title

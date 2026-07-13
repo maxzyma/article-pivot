@@ -13,6 +13,8 @@ and private automation owns credentials, schedules, routing, and runtime state.
 - Versioned canonical article model with stable block identifiers.
 - Structural validation for headings, code, math, links, and translations.
 - Chinese-first bilingual Markdown rendering.
+- Versioned editorial overlays and a shared `bilingual-zh-first.v1`
+  publication document for local and platform renderers.
 - Dry-run-first archive adapter for `trending-diggest` repositories.
 - RSS discovery and canonical extraction for new Lilian Weng posts.
 - Dated notes archive planning with overwrite protection.
@@ -67,6 +69,11 @@ article-pivot archive-notes /path/to/package \
 
 `init-translation` deliberately creates pending segments. A translator must
 fill every segment and the translated title before validation and rendering.
+Publication packages also provide `editorial/<locale>.json` with the category,
+key points, glossary, source label, and `bilingual-zh-first.v1` profile. When
+present, both preview and archive rendering use the same fixed structure:
+metadata, key points, body, and glossary. Platform publishers must derive from
+that publication document and limit changes to target capability adaptations.
 The notes adapter refuses to overwrite an existing article directory.
 
 New Lilian Weng posts use this flow. Claude Blog remains on its legacy

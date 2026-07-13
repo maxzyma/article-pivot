@@ -130,6 +130,7 @@ class LilianWengAdapterTests(unittest.TestCase):
             self.assertIn("2026-07/2026-07-04/harness-engineering-for-self-improvement", str(plan.article_dir))
             self.assertFalse(plan.article_dir.exists())
             self.assertIn("harness-engineering-for-self-improvement.md", plan.index_content)
+            self.assertIsNone(plan.editorial_path)
 
     def test_translation_overlay_starts_pending_and_archive_refuses_overwrite(self):
         html = (FIXTURES / "lilian-harness.html").read_text()

@@ -177,3 +177,58 @@ class TranslationOverlay:
                 block_id: segment.to_dict() for block_id, segment in self.segments.items()
             },
         }
+
+
+@dataclass(frozen=True)
+class GlossaryEntry:
+    term: str
+    translation: str
+    note: str = ""
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "GlossaryEntry":
+        return cls(
+            term=value["term"],
+            translation=value["translation"],
+            note=value.get("note", ""),
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        result = {"term": self.term, "translation": self.translation}
+        if self.note:
+            result["note"] = self.note
+        return result
+
+
+@dataclass(frozen=True)
+class EditorialOverlay:
+    locale: str
+    source_revision: str
+    profile: str
+    category: str
+    key_points: tuple[str, ...]
+    glossary: tuple[GlossaryEntry, ...]
+    source_label: str = ""
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "EditorialOverlay":
+        return cls(
+            locale=value["locale"],
+            source_revision=value["source_revision"],
+            profile=value["profile"],
+            category=value.get("category", ""),
+            key_points=tuple(value.get("key_points", [])),
+            glossary=tuple(GlossaryEntry.from_dict(item) for item in value.get("glossary", [])),
+            source_label=value.get("source_label", ""),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "locale": self.locale,
+            "source_revision": self.source_revision,
+            "profile": self.profile,
+            "category": self.category,
+            "source_label": self.source_label,
+            "key_points": list(self.key_points),
+            "glossary": [entry.to_dict() for entry in self.glossary],
+        }

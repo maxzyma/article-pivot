@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from .model import CanonicalDocument, TranslationOverlay, TranslationSegment
+from .model import CanonicalDocument, EditorialOverlay, TranslationOverlay, TranslationSegment
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,7 @@ class CanonicalPackage:
     root: Path
     document: CanonicalDocument
     translations: dict[str, TranslationOverlay]
+    editorials: dict[str, EditorialOverlay] = field(default_factory=dict)
 
     @classmethod
     def load(cls, root: str | Path) -> "CanonicalPackage":
@@ -26,12 +27,23 @@ class CanonicalPackage:
             for path in sorted(translation_dir.glob("*.json")):
                 overlay = TranslationOverlay.from_dict(json.loads(path.read_text()))
                 translations[overlay.locale] = overlay
-        return cls(root=root_path, document=document, translations=translations)
+        editorials: dict[str, EditorialOverlay] = {}
+        editorial_dir = root_path / "editorial"
+        if editorial_dir.is_dir():
+            for path in sorted(editorial_dir.glob("*.json")):
+                editorial = EditorialOverlay.from_dict(json.loads(path.read_text()))
+                editorials[editorial.locale] = editorial
+        return cls(root=root_path, document=document, translations=translations, editorials=editorials)
 
     def translation(self, locale: str | None) -> TranslationOverlay | None:
         if locale is None:
             return None
         return self.translations.get(locale)
+
+    def editorial(self, locale: str | None) -> EditorialOverlay | None:
+        if locale is None:
+            return None
+        return self.editorials.get(locale)
 
     def initialize_translation(self, locale: str) -> Path:
         translation_dir = self.root / "translations"
@@ -68,4 +80,4 @@ class CanonicalPackage:
             raw_dir = root_path / "raw"
             raw_dir.mkdir(exist_ok=True)
             (raw_dir / "source.html").write_text(raw_html)
-        return cls(root=root_path, document=document, translations={})
+        return cls(root=root_path, document=document, translations={}, editorials={})

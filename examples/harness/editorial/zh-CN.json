@@ -1,0 +1,23 @@
+{
+  "locale": "zh-CN",
+  "source_revision": "sha256:harness-fixture",
+  "profile": "bilingual-zh-first.v1",
+  "category": "AI Agent / Harness Engineering",
+  "source_label": "Lil'Log / Lilian Weng",
+  "key_points": [
+    "Harness 是围绕基础模型组织上下文、工具和工作流的运行系统。",
+    "可靠的自我改进需要持久记忆与可验证的评估循环。"
+  ],
+  "glossary": [
+    {
+      "term": "Harness",
+      "translation": "外层运行框架",
+      "note": "围绕基础模型组织执行的系统。"
+    },
+    {
+      "term": "Context engineering",
+      "translation": "上下文工程",
+      "note": "管理模型可见信息与状态。"
+    }
+  ]
+}

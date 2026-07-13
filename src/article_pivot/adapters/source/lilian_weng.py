@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from ...model import Block, CanonicalDocument, InlineNode
-from ...validation import ValidationReport, validate_document
+from ...validation import ValidationIssue, ValidationReport, validate_document
 
 
 DEFAULT_FEED = "https://lilianweng.github.io/index.xml"
@@ -85,16 +85,31 @@ def _fetch_text(url: str, accept: str = "text/html") -> str:
         return response.read().decode(response.headers.get_content_charset() or "utf-8")
 
 
+def _text_nodes(value: str) -> tuple[InlineNode, ...]:
+    nodes: list[InlineNode] = []
+    position = 0
+    for match in re.finditer(r"(?<!\\)\$(?!\$)(.+?)(?<!\\)\$", value, flags=re.DOTALL):
+        if match.start() > position:
+            nodes.append(InlineNode(type="text", text=value[position : match.start()]))
+        nodes.append(InlineNode(type="inline_math", text=match.group(1)))
+        position = match.end()
+    if position < len(value):
+        nodes.append(InlineNode(type="text", text=value[position:]))
+    return tuple(nodes)
+
+
 def _inline_nodes(element: Tag, base_url: str) -> tuple[InlineNode, ...]:
     nodes: list[InlineNode] = []
     for child in element.children:
         if isinstance(child, NavigableString):
             if str(child):
-                nodes.append(InlineNode(type="text", text=str(child)))
+                nodes.extend(_text_nodes(str(child)))
             continue
         if not isinstance(child, Tag):
             continue
         name = child.name.lower()
+        if name == "a" and "anchor" in child.get("class", []) and child.has_attr("hidden"):
+            continue
         children = _inline_nodes(child, base_url)
         text = child.get_text(" ", strip=False)
         if name in {"strong", "b"}:
@@ -155,6 +170,17 @@ class LilianWengAdapter:
         published_at = published_meta.get("content", "") if published_meta else ""
         factory = _IdFactory()
         blocks = tuple(self._parse_children(content, snapshot.url, factory))
+        source_counts = {
+            "heading": len(content.find_all(["h1", "h2", "h3", "h4", "h5", "h6"], recursive=False)),
+            "math": sum(
+                1
+                for node in content.find_all("div", recursive=False)
+                if node.get_text().strip().startswith("$$") and node.get_text().strip().endswith("$$")
+            ),
+            "image": len(content.find_all("figure", recursive=False)),
+            "table": len(content.find_all("table", recursive=False)),
+            "code": len(content.find_all("pre", recursive=False)),
+        }
         assets = tuple(
             {
                 "type": "image",
@@ -178,17 +204,33 @@ class LilianWengAdapter:
             revision={
                 "source_hash": snapshot.source_hash,
                 "fetched_at": snapshot.fetched_at,
-                "parser_version": "lilian-weng.v1",
+                "parser_version": "lilian-weng.v2",
             },
             title=title,
             title_en=title,
             blocks=blocks,
-            metadata={"slug": slug, "source_slug": source_slug, "source_profile": "lilian-weng.v1"},
+            metadata={
+                "slug": slug,
+                "source_slug": source_slug,
+                "source_profile": "lilian-weng.v2",
+                "source_counts": source_counts,
+            },
             assets=assets,
         )
 
     def validate(self, document: CanonicalDocument) -> ValidationReport:
-        return validate_document(document)
+        report = validate_document(document)
+        actual = Counter(block.type for block in document.all_blocks())
+        issues = list(report.issues)
+        for block_type, expected in document.metadata.get("source_counts", {}).items():
+            if actual[block_type] != expected:
+                issues.append(
+                    ValidationIssue(
+                        "source.count_mismatch",
+                        f"{block_type}: expected {expected}, parsed {actual[block_type]}",
+                    )
+                )
+        return ValidationReport(tuple(issues))
 
     def _parse_children(self, parent: Tag, base_url: str, factory: _IdFactory):
         for child in parent.children:
@@ -252,6 +294,11 @@ class LilianWengAdapter:
             body = rows[1:] if headers else rows
             text = "\n".join("\t".join(row) for row in rows)
             return Block(factory.make("table", text), "table", attrs={"headers": headers, "rows": body})
+        if name == "div":
+            text = element.get_text().strip()
+            if text.startswith("$$") and text.endswith("$$"):
+                latex = text[2:-2].strip()
+                return Block(factory.make("math", latex), "math", attrs={"latex": latex})
         if name == "div" and (element.find("pre") or "highlight" in element.get("class", [])):
             pre = element.find("pre")
             return self._parse_block(pre, base_url, factory) if pre else None

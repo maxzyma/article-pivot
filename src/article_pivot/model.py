@@ -122,6 +122,7 @@ class TranslationSegment:
     block_id: str
     inlines: tuple[InlineNode, ...]
     status: str = "translated"
+    attrs: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, block_id: str, value: dict[str, Any]) -> "TranslationSegment":
@@ -129,13 +130,17 @@ class TranslationSegment:
             block_id=block_id,
             inlines=tuple(InlineNode.from_dict(node) for node in value.get("inlines", [])),
             status=value.get("status", "translated"),
+            attrs=dict(value.get("attrs", {})),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "status": self.status,
             "inlines": [node.to_dict() for node in self.inlines],
         }
+        if self.attrs:
+            result["attrs"] = self.attrs
+        return result
 
 
 @dataclass(frozen=True)

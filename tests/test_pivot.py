@@ -25,7 +25,9 @@ class PivotRegressionTests(unittest.TestCase):
 
     def test_render_preserves_formula_code_and_heading_hierarchy(self):
         rendered = render_bilingual_markdown(self.package)
-        self.assertIn("### 上下文工程", rendered)
+        self.assertIn("## 上下文工程", rendered)
+        self.assertIn("> Context Engineering", rendered)
+        self.assertNotIn("> ## Context Engineering", rendered)
         self.assertNotIn("\n# 上下文工程", rendered)
         self.assertIn("$s \\in \\mathcal{S}$", rendered)
         self.assertIn("```bibtex\n@article{weng2026harness", rendered)

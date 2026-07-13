@@ -43,12 +43,14 @@ def validate_document(
         issues.append(ValidationIssue("revision.hash", "source_hash is required"))
 
     block_ids: set[str] = set()
+    blocks_by_id = {}
     for block in document.all_blocks():
         if not block.id:
             issues.append(ValidationIssue("block.id", "block id is required"))
         elif block.id in block_ids:
             issues.append(ValidationIssue("block.duplicate", "duplicate block id", block.id))
         block_ids.add(block.id)
+        blocks_by_id[block.id] = block
         if block.type == "heading":
             level = block.attrs.get("level")
             if not isinstance(level, int) or level < 1 or level > 6:
@@ -69,13 +71,15 @@ def validate_document(
         translatable = {
             block.id
             for block in document.all_blocks()
-            if block.type in {"heading", "paragraph", "list_item"}
+            if block.type in {"heading", "paragraph", "list_item", "table"}
         }
         missing = translatable - set(overlay.segments)
         for block_id in sorted(missing):
             issues.append(ValidationIssue("translation.missing_block", "missing translated block", block_id))
         for block_id in sorted(translatable & set(overlay.segments)):
             segment = overlay.segments[block_id]
-            if segment.status != "translated" or not segment.inlines:
+            block = blocks_by_id[block_id]
+            has_content = bool(segment.attrs) if block.type == "table" else bool(segment.inlines)
+            if segment.status != "translated" or not has_content:
                 issues.append(ValidationIssue("translation.incomplete_block", "translation is incomplete", block_id))
     return ValidationReport(tuple(issues))

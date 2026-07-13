@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from article_pivot.adapters.archive import DatedNotesArchiveAdapter
 from article_pivot.adapters.source.lilian_weng import LilianWengAdapter, LilianWengDiscovery, RawSnapshot
+from article_pivot.model import TranslationOverlay, TranslationSegment
 from article_pivot.package import CanonicalPackage
-from article_pivot.renderers import render_source_markdown
+from article_pivot.renderers import render_bilingual_markdown, render_source_markdown
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -35,11 +37,16 @@ class LilianWengAdapterTests(unittest.TestCase):
         self.assertTrue(adapter.validate(document).ok)
         self.assertEqual("lilian-weng:2026-07-04-harness", document.document_id)
         self.assertEqual("harness-engineering-for-self-improvement", document.metadata["slug"])
+        self.assertEqual("lilian-weng.v2", document.metadata["source_profile"])
+        self.assertEqual(1, document.metadata["source_counts"]["math"])
         self.assertEqual(["heading", "heading"], [block.type for block in document.blocks if block.type == "heading"])
         self.assertEqual(1, len(document.assets))
         block_types = [block.type for block in document.blocks]
         self.assertIn("table", block_types)
         self.assertIn("code", block_types)
+        self.assertIn("math", block_types)
+        heading = next(block for block in document.blocks if block.type == "heading")
+        self.assertNotIn("#", str(heading.to_dict()))
         self.assertNotIn("Table of Contents", " ".join(str(block.to_dict()) for block in document.blocks))
 
     def test_source_markdown_preserves_formula_table_and_code(self):
@@ -55,8 +62,55 @@ class LilianWengAdapterTests(unittest.TestCase):
             package = CanonicalPackage.write(temp, document, raw_html=html)
             markdown = render_source_markdown(package)
             self.assertIn("$s \\in \\mathcal{S}$", markdown)
+            self.assertIn("$$\nc_s=(\\rho_s,F_s)\n$$", markdown)
             self.assertIn("| Group | Tools |", markdown)
             self.assertIn("```bibtex", markdown)
+
+    def test_source_count_mismatch_fails_validation(self):
+        html = (FIXTURES / "lilian-harness.html").read_text()
+        snapshot = RawSnapshot(
+            url="https://lilianweng.github.io/posts/2026-07-04-harness/",
+            fetched_at="2026-07-12T00:00:00+00:00",
+            html=html,
+            source_hash="sha256:" + hashlib.sha256(html.encode()).hexdigest(),
+        )
+        adapter = LilianWengAdapter()
+        document = adapter.parse(snapshot)
+        metadata = dict(document.metadata)
+        metadata["source_counts"] = dict(metadata["source_counts"], math=2)
+        report = adapter.validate(replace(document, metadata=metadata))
+        self.assertFalse(report.ok)
+        self.assertIn("source.count_mismatch", [issue.code for issue in report.issues])
+
+    def test_bilingual_renderer_uses_translated_table_attrs(self):
+        html = (FIXTURES / "lilian-harness.html").read_text()
+        snapshot = RawSnapshot(
+            url="https://lilianweng.github.io/posts/2026-07-04-harness/",
+            fetched_at="2026-07-12T00:00:00+00:00",
+            html=html,
+            source_hash="sha256:" + hashlib.sha256(html.encode()).hexdigest(),
+        )
+        document = LilianWengAdapter().parse(snapshot)
+        segments = {}
+        for block in document.all_blocks():
+            if block.type in {"heading", "paragraph", "list_item"}:
+                segments[block.id] = TranslationSegment(block.id, block.inlines)
+            elif block.type == "table":
+                segments[block.id] = TranslationSegment(
+                    block.id,
+                    (),
+                    attrs={"headers": ["分组", "工具"], "rows": [["输入输出", "读取、写入"]]},
+                )
+        overlay = TranslationOverlay(
+            locale="zh-CN",
+            source_revision=document.revision["source_hash"],
+            title="面向自我改进的 Harness 工程",
+            segments=segments,
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            package = CanonicalPackage(Path(temp), document, {"zh-CN": overlay})
+            markdown = render_bilingual_markdown(package)
+            self.assertIn("| 分组 | 工具 |", markdown)
 
     def test_notes_archive_dry_plan_uses_published_date(self):
         html = (FIXTURES / "lilian-harness.html").read_text()
@@ -94,6 +148,8 @@ class LilianWengAdapterTests(unittest.TestCase):
             self.assertTrue(overlay_path.is_file())
             self.assertTrue(overlay.segments)
             self.assertTrue(all(segment.status == "pending" for segment in overlay.segments.values()))
+            table_id = next(block.id for block in document.blocks if block.type == "table")
+            self.assertIn(table_id, overlay.segments)
 
             adapter = DatedNotesArchiveAdapter(archive)
             plan = adapter.plan(package)

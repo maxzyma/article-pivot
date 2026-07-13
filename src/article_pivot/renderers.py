@@ -83,7 +83,7 @@ def _apply_overlay(block: Block, overlay: TranslationOverlay) -> Block:
         id=block.id,
         type=block.type,
         inlines=segment.inlines if segment else block.inlines,
-        attrs=block.attrs,
+        attrs=segment.attrs if segment and segment.attrs else block.attrs,
         children=tuple(_apply_overlay(child, overlay) for child in block.children),
     )
 
@@ -91,7 +91,7 @@ def _apply_overlay(block: Block, overlay: TranslationOverlay) -> Block:
 def render_bilingual_markdown(
     package: CanonicalPackage,
     locale: str = "zh-CN",
-    heading_offset: int = 2,
+    heading_offset: int = 1,
 ) -> str:
     overlay = package.translation(locale)
     validate_document(package.document, overlay).require_ok()
@@ -106,7 +106,9 @@ def render_bilingual_markdown(
             translated_block = _apply_overlay(block, overlay)
             parts.append(_render_block(translated_block, heading_offset))
             original = _render_block(block, heading_offset)
-            if block.type == "list":
+            if block.type == "heading":
+                parts.append(_quote(render_inlines(block.inlines)))
+            elif block.type == "list":
                 original = "\n".join(
                     f"> • {line.split(' ', 1)[1]}" if " " in line else f"> • {line}"
                     for line in original.splitlines()

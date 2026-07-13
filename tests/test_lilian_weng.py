@@ -37,7 +37,7 @@ class LilianWengAdapterTests(unittest.TestCase):
         self.assertTrue(adapter.validate(document).ok)
         self.assertEqual("lilian-weng:2026-07-04-harness", document.document_id)
         self.assertEqual("harness-engineering-for-self-improvement", document.metadata["slug"])
-        self.assertEqual("lilian-weng.v2", document.metadata["source_profile"])
+        self.assertEqual("lilian-weng.v3", document.metadata["source_profile"])
         self.assertEqual(1, document.metadata["source_counts"]["math"])
         self.assertEqual(["heading", "heading"], [block.type for block in document.blocks if block.type == "heading"])
         self.assertEqual(1, len(document.assets))
@@ -65,6 +65,7 @@ class LilianWengAdapterTests(unittest.TestCase):
             self.assertIn("$$\nc_s=(\\rho_s,F_s)\n$$", markdown)
             self.assertIn("| Group | Tools |", markdown)
             self.assertIn("```bibtex", markdown)
+            self.assertNotIn("[](", markdown)
 
     def test_source_count_mismatch_fails_validation(self):
         html = (FIXTURES / "lilian-harness.html").read_text()

@@ -110,6 +110,8 @@ def _inline_nodes(element: Tag, base_url: str) -> tuple[InlineNode, ...]:
         name = child.name.lower()
         if name == "a" and "anchor" in child.get("class", []) and child.has_attr("hidden"):
             continue
+        if name == "a" and not child.get("href") and not child.get_text(strip=True):
+            continue
         children = _inline_nodes(child, base_url)
         text = child.get_text(" ", strip=False)
         if name in {"strong", "b"}:
@@ -204,7 +206,7 @@ class LilianWengAdapter:
             revision={
                 "source_hash": snapshot.source_hash,
                 "fetched_at": snapshot.fetched_at,
-                "parser_version": "lilian-weng.v2",
+                "parser_version": "lilian-weng.v3",
             },
             title=title,
             title_en=title,
@@ -212,7 +214,7 @@ class LilianWengAdapter:
             metadata={
                 "slug": slug,
                 "source_slug": source_slug,
-                "source_profile": "lilian-weng.v2",
+                "source_profile": "lilian-weng.v3",
                 "source_counts": source_counts,
             },
             assets=assets,

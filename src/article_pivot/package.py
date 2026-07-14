@@ -54,7 +54,8 @@ class CanonicalPackage:
         translatable = {
             block.id: TranslationSegment(block_id=block.id, inlines=(), status="pending")
             for block in self.document.all_blocks()
-            if block.type in {"heading", "paragraph", "list_item", "table"}
+            if block.type == "table"
+            or (block.type in {"heading", "paragraph", "list_item"} and block.inlines)
         }
         overlay = TranslationOverlay(
             locale=locale,

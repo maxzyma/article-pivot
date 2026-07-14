@@ -8,7 +8,7 @@ from pathlib import Path
 from article_pivot.adapters.archive import TrendingDigestArchiveAdapter
 from article_pivot.adapters.archive import DatedNotesArchiveAdapter
 from article_pivot.package import CanonicalPackage
-from article_pivot.renderers import render_bilingual_markdown
+from article_pivot.renderers import _quote, normalize_display_math, render_bilingual_markdown
 from article_pivot.publication import build_publication_document, publication_document_title
 from article_pivot.validation import validate_document
 
@@ -41,6 +41,15 @@ class PivotRegressionTests(unittest.TestCase):
         self.assertNotIn("> - Memory and context degradation.", rendered)
         self.assertIn("## 术语对照", rendered)
         self.assertIn("| Harness | 外层运行框架 |", rendered)
+
+    def test_display_math_avoids_dingtalk_textrm_quote_truncation(self):
+        self.assertEqual(
+            r"\underbrace{x}_\text{posterior}",
+            normalize_display_math(r'\underbrace{x}_\textrm{"posterior"}'),
+        )
+
+    def test_quoted_markdown_list_marker_is_visible_in_dingtalk(self):
+        self.assertEqual("> • nested item", _quote("  - nested item"))
 
     def test_publication_document_owns_shared_title_and_metadata(self):
         publication = build_publication_document(self.package)
@@ -83,7 +92,32 @@ class PivotRegressionTests(unittest.TestCase):
             self.assertEqual("面向自我改进的 Harness 工程", metadata["title_zh"])
             self.assertEqual("Harness Engineering for Self-Improvement", metadata["title_en"])
             self.assertIn("[面向自我改进的 Harness 工程]", plan.index_content)
+            self.assertEqual(plan.source_path.read_text(), plan.bilingual_path.read_text())
+            self.assertIn("# Harness Engineering for Self-Improvement", plan.original_path.read_text())
             self.assertIn("## 核心要点", plan.bilingual_path.read_text())
+
+            plan.source_path.write_text("stale\n")
+            adapter.refresh(adapter.plan(self.package), self.package)
+            self.assertIn("## 核心要点", plan.source_path.read_text())
+
+    def test_dated_archive_sorts_months_and_rows_descending(self):
+        with tempfile.TemporaryDirectory() as temp:
+            archive = Path(temp)
+            archive.joinpath("article-index.md").write_text(
+                "# 文章索引\n\n"
+                "## 2026-06\n\n"
+                "| 日期 | 标题 | 来源 | 文件路径 |\n"
+                "|------|------|------|----------|\n"
+                "| 06-01 | [Older](older.md) | Test | `older/` |\n\n"
+                "## 2026-07\n\n"
+                "| 日期 | 标题 | 来源 | 文件路径 |\n"
+                "|------|------|------|----------|\n"
+                "| 07-01 | [Earlier](earlier.md) | Test | `earlier/` |\n"
+                "| 07-10 | [Later](later.md) | Test | `later/` |\n"
+            )
+            content = DatedNotesArchiveAdapter(archive).plan(self.package).index_content
+            self.assertLess(content.index("## 2026-07"), content.index("## 2026-06"))
+            self.assertLess(content.index("| 07-10 |"), content.index("| 07-01 |"))
 
     def test_archive_write_is_idempotent_by_document_id(self):
         with tempfile.TemporaryDirectory() as temp:

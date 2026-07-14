@@ -88,17 +88,46 @@ def _fetch_text(url: str, accept: str = "text/html") -> str:
 def _text_nodes(value: str) -> tuple[InlineNode, ...]:
     nodes: list[InlineNode] = []
     position = 0
-    for match in re.finditer(r"(?<!\\)\$(?!\$)(.+?)(?<!\\)\$", value, flags=re.DOTALL):
+    pattern = re.compile(
+        r"(?<!\\)\$\$(.+?)(?<!\\)\$\$"
+        r"|(?<![$\\])\$(?!\$)(.+?)(?<![$\\])\$(?!\$)",
+        flags=re.DOTALL,
+    )
+    for match in pattern.finditer(value):
         if match.start() > position:
             nodes.append(InlineNode(type="text", text=value[position : match.start()]))
-        nodes.append(InlineNode(type="inline_math", text=match.group(1)))
+        if match.group(1) is not None:
+            nodes.extend(
+                (
+                    InlineNode(type="text", text="$"),
+                    InlineNode(type="inline_math", text=match.group(1)),
+                    InlineNode(type="text", text="$"),
+                )
+            )
+        else:
+            nodes.append(InlineNode(type="inline_math", text=match.group(2)))
         position = match.end()
     if position < len(value):
         nodes.append(InlineNode(type="text", text=value[position:]))
     return tuple(nodes)
 
 
-def _inline_nodes(element: Tag, base_url: str) -> tuple[InlineNode, ...]:
+def _is_embedded_block(element: Tag) -> bool:
+    name = element.name.lower()
+    return name in {"blockquote", "figure", "ol", "pre", "table", "ul"} or (
+        name == "div"
+        and (
+            element.find("pre")
+            or "highlight" in element.get("class", [])
+            or (
+                element.get_text().strip().startswith("$$")
+                and element.get_text().strip().endswith("$$")
+            )
+        )
+    )
+
+
+def _inline_nodes(element: Tag, base_url: str, skip_block_content: bool = False) -> tuple[InlineNode, ...]:
     nodes: list[InlineNode] = []
     for child in element.children:
         if isinstance(child, NavigableString):
@@ -108,11 +137,13 @@ def _inline_nodes(element: Tag, base_url: str) -> tuple[InlineNode, ...]:
         if not isinstance(child, Tag):
             continue
         name = child.name.lower()
+        if skip_block_content and _is_embedded_block(child):
+            continue
         if name == "a" and "anchor" in child.get("class", []) and child.has_attr("hidden"):
             continue
         if name == "a" and not child.get("href") and not child.get_text(strip=True):
             continue
-        children = _inline_nodes(child, base_url)
+        children = _inline_nodes(child, base_url, skip_block_content)
         text = child.get_text(" ", strip=False)
         if name in {"strong", "b"}:
             nodes.append(InlineNode(type="strong", children=children, text=text if not children else ""))
@@ -172,16 +203,21 @@ class LilianWengAdapter:
         published_at = published_meta.get("content", "") if published_meta else ""
         factory = _IdFactory()
         blocks = tuple(self._parse_children(content, snapshot.url, factory))
+        math_nodes = [
+            node
+            for node in content.find_all("div")
+            if node.get_text().strip().startswith("$$") and node.get_text().strip().endswith("$$")
+        ]
         source_counts = {
-            "heading": len(content.find_all(["h1", "h2", "h3", "h4", "h5", "h6"], recursive=False)),
+            "heading": len(content.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])),
             "math": sum(
                 1
-                for node in content.find_all("div", recursive=False)
-                if node.get_text().strip().startswith("$$") and node.get_text().strip().endswith("$$")
+                for node in math_nodes
+                if not any(parent in math_nodes for parent in node.parents)
             ),
-            "image": len(content.find_all("figure", recursive=False)),
-            "table": len(content.find_all("table", recursive=False)),
-            "code": len(content.find_all("pre", recursive=False)),
+            "image": sum(1 for node in content.find_all("figure") if node.find("img")),
+            "table": len(content.find_all("table")),
+            "code": len(content.find_all("pre")),
         }
         assets = tuple(
             {
@@ -189,7 +225,8 @@ class LilianWengAdapter:
                 "url": block.attrs["url"],
                 "alt": block.attrs.get("alt", ""),
             }
-            for block in blocks
+            for root in blocks
+            for block in root.walk()
             if block.type == "image"
         )
         source_slug = urlparse(snapshot.url).path.rstrip("/").split("/")[-1]
@@ -206,7 +243,7 @@ class LilianWengAdapter:
             revision={
                 "source_hash": snapshot.source_hash,
                 "fetched_at": snapshot.fetched_at,
-                "parser_version": "lilian-weng.v3",
+                "parser_version": "lilian-weng.v5",
             },
             title=title,
             title_en=title,
@@ -214,7 +251,7 @@ class LilianWengAdapter:
             metadata={
                 "slug": slug,
                 "source_slug": source_slug,
-                "source_profile": "lilian-weng.v3",
+                "source_profile": "lilian-weng.v5",
                 "source_counts": source_counts,
             },
             assets=assets,
@@ -253,25 +290,54 @@ class LilianWengAdapter:
             text = _plain_text(inlines)
             return Block(factory.make("heading", text), "heading", inlines, {"level": int(name[1])})
         if name == "p":
-            inlines = _inline_nodes(element, base_url)
+            inlines = _inline_nodes(element, base_url, skip_block_content=True)
             text = _plain_text(inlines)
-            if not text.strip():
-                return None
-            return Block(factory.make("paragraph", text), "paragraph", inlines)
+            blocks = []
+            if text.strip():
+                blocks.append(Block(factory.make("paragraph", text), "paragraph", inlines))
+            for child in element.children:
+                if not isinstance(child, Tag) or not _is_embedded_block(child):
+                    continue
+                nested = self._parse_block(child, base_url, factory)
+                if isinstance(nested, tuple):
+                    blocks.extend(nested)
+                elif nested is not None:
+                    blocks.append(nested)
+            return tuple(blocks) if len(blocks) > 1 else (blocks[0] if blocks else None)
         if name in {"ul", "ol"}:
             items = []
+            embedded_blocks = []
             for item in element.find_all("li", recursive=False):
-                inlines = _inline_nodes(item, base_url)
-                nested = tuple(
-                    block
-                    for nested_list in item.find_all(["ul", "ol"], recursive=False)
-                    for block in (self._parse_block(nested_list, base_url, factory),)
-                    if isinstance(block, Block)
-                )
+                inlines = _inline_nodes(item, base_url, skip_block_content=True)
+                nested = []
+                for nested_list in item.find_all(["ul", "ol"], recursive=False):
+                    parsed = self._parse_block(nested_list, base_url, factory)
+                    parsed_blocks = parsed if isinstance(parsed, tuple) else (parsed,)
+                    for block in parsed_blocks:
+                        if not isinstance(block, Block):
+                            continue
+                        if block.type == "list":
+                            nested.append(block)
+                        else:
+                            embedded_blocks.append(block)
                 text = _plain_text(inlines)
-                items.append(Block(factory.make("list-item", text), "list_item", inlines, children=nested))
+                items.append(Block(factory.make("list-item", text), "list_item", inlines, children=tuple(nested)))
+                for child in item.children:
+                    if not isinstance(child, Tag) or not _is_embedded_block(child) or child.name.lower() in {"ul", "ol"}:
+                        continue
+                    block = self._parse_block(child, base_url, factory)
+                    if isinstance(block, tuple):
+                        embedded_blocks.extend(block)
+                    elif block is not None:
+                        embedded_blocks.append(block)
             text = "\n".join(_plain_text(item.inlines) for item in items)
-            return Block(factory.make("list", text), "list", attrs={"ordered": name == "ol"}, children=tuple(items))
+            list_block = Block(
+                factory.make("list", text),
+                "list",
+                attrs={"ordered": name == "ol"},
+                children=tuple(items),
+            )
+            return (list_block, *embedded_blocks) if embedded_blocks else list_block
         if name == "blockquote":
             children = tuple(self._parse_children(element, base_url, factory))
             text = element.get_text(" ", strip=True)
@@ -284,12 +350,24 @@ class LilianWengAdapter:
             return Block(factory.make("code", code), "code", attrs={"code": code, "language": language})
         if name == "figure":
             image = element.find("img")
-            if image is None:
-                return None
-            url = urljoin(base_url, image.get("src", ""))
-            caption = element.find("figcaption")
-            alt = image.get("alt", "") or (caption.get_text(" ", strip=True) if caption else "")
-            return Block(factory.make("image", url), "image", attrs={"url": url, "alt": alt})
+            blocks = []
+            if image is not None:
+                url = urljoin(base_url, image.get("src", ""))
+                caption = element.find("figcaption")
+                alt = image.get("alt", "") or (caption.get_text(" ", strip=True) if caption else "")
+                blocks.append(Block(factory.make("image", url), "image", attrs={"url": url, "alt": alt}))
+
+            # Some historical posts contain an unclosed figure that encloses later
+            # article blocks. Recover those direct children instead of dropping them.
+            for child in element.children:
+                if not isinstance(child, Tag) or child.name.lower() in {"img", "figcaption"}:
+                    continue
+                nested = self._parse_block(child, base_url, factory)
+                if isinstance(nested, tuple):
+                    blocks.extend(nested)
+                elif nested is not None:
+                    blocks.append(nested)
+            return tuple(blocks) or None
         if name == "table":
             rows = [[cell.get_text(" ", strip=True) for cell in row.find_all(["th", "td"])] for row in element.find_all("tr")]
             headers = rows[0] if rows and element.find("th") else []

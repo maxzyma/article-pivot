@@ -71,7 +71,8 @@ def validate_document(
         translatable = {
             block.id
             for block in document.all_blocks()
-            if block.type in {"heading", "paragraph", "list_item", "table"}
+            if block.type == "table"
+            or (block.type in {"heading", "paragraph", "list_item"} and block.inlines)
         }
         missing = translatable - set(overlay.segments)
         for block_id in sorted(missing):

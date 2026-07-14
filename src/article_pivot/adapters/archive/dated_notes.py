@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,10 +10,46 @@ from ...package import CanonicalPackage
 from ...renderers import render_bilingual_markdown, render_source_markdown
 
 
+MONTH_HEADER = re.compile(r"^## (\d{4}-\d{2})$")
+DATED_ROW = re.compile(r"^\| (\d{2}-\d{2}) \|")
+
+
+def _sort_month_sections(lines: list[str]) -> list[str]:
+    starts = [index for index, line in enumerate(lines) if MONTH_HEADER.match(line)]
+    if not starts:
+        return lines
+
+    footer = len(lines)
+    for index in range(starts[-1] + 1, len(lines)):
+        if lines[index] == "---":
+            footer = index
+            break
+
+    sections: list[tuple[str, list[str]]] = []
+    ends = starts[1:] + [footer]
+    for start, end in zip(starts, ends):
+        section = lines[start:end]
+        rows = sorted(
+            (line for line in section if DATED_ROW.match(line)),
+            key=lambda line: DATED_ROW.match(line).group(1),
+            reverse=True,
+        )
+        row_iter = iter(rows)
+        section = [next(row_iter) if DATED_ROW.match(line) else line for line in section]
+        sections.append((MONTH_HEADER.match(section[0]).group(1), section))
+
+    output = lines[: starts[0]]
+    for _, section in sorted(sections, key=lambda item: item[0], reverse=True):
+        output.extend(section)
+    output.extend(lines[footer:])
+    return output
+
+
 @dataclass(frozen=True)
 class NotesArchivePlan:
     article_dir: Path
     source_path: Path
+    original_path: Path
     bilingual_path: Path | None
     canonical_path: Path
     translation_path: Path | None
@@ -21,6 +58,7 @@ class NotesArchivePlan:
     metadata_path: Path
     index_path: Path
     source_content: str
+    original_content: str
     bilingual_content: str
     metadata_content: str
     translation_content: str
@@ -31,6 +69,7 @@ class NotesArchivePlan:
         return {
             "article_dir": str(self.article_dir),
             "source_path": str(self.source_path),
+            "original_path": str(self.original_path),
             "bilingual_path": str(self.bilingual_path) if self.bilingual_path else None,
             "canonical_path": str(self.canonical_path),
             "translation_path": str(self.translation_path) if self.translation_path else None,
@@ -57,6 +96,8 @@ class DatedNotesArchiveAdapter:
         display_title = overlay.title if overlay and overlay.title else document.title
         bilingual_path = article_dir / f"{slug}-bilingual.md" if overlay else None
         raw_source = package.root / "raw" / "source.html"
+        source_markdown = render_source_markdown(package)
+        publication_markdown = render_bilingual_markdown(package, locale) if overlay else source_markdown
         metadata = {
             "schema_version": "article-archive.v1",
             "document_id": document.document_id,
@@ -70,6 +111,7 @@ class DatedNotesArchiveAdapter:
             "generator": "article-pivot@0.1.0",
             "canonical_file": "./canonical.json",
             "content_file": f"./{slug}.md",
+            "source_file": f"./{slug}-source.md",
             "bilingual_file": f"./{slug}-bilingual.md" if overlay else None,
             "translation_file": f"./translations/{locale}.json" if overlay else None,
             "editorial_file": f"./editorial/{locale}.json" if editorial else None,
@@ -103,9 +145,11 @@ class DatedNotesArchiveAdapter:
             divider = lines.index("---") + 1 if "---" in lines else len(lines)
             lines[divider:divider] = section
             index_content = "\n".join(lines) + "\n"
+        index_content = "\n".join(_sort_month_sections(index_content.splitlines())) + "\n"
         return NotesArchivePlan(
             article_dir=article_dir,
             source_path=article_dir / f"{slug}.md",
+            original_path=article_dir / f"{slug}-source.md",
             bilingual_path=bilingual_path,
             canonical_path=article_dir / "canonical.json",
             translation_path=article_dir / "translations" / f"{locale}.json" if overlay else None,
@@ -113,8 +157,9 @@ class DatedNotesArchiveAdapter:
             raw_path=article_dir / "raw" / "source.html" if raw_source.is_file() else None,
             metadata_path=article_dir / f"{slug}.metadata.json",
             index_path=index_path,
-            source_content=render_source_markdown(package),
-            bilingual_content=render_bilingual_markdown(package, locale) if overlay else "",
+            source_content=publication_markdown,
+            original_content=source_markdown,
+            bilingual_content=publication_markdown if overlay else "",
             metadata_content=json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
             translation_content=(
                 json.dumps(overlay.to_dict(), ensure_ascii=False, indent=2) + "\n" if overlay else ""
@@ -132,6 +177,7 @@ class DatedNotesArchiveAdapter:
             )
         plan.article_dir.mkdir(parents=True, exist_ok=True)
         plan.source_path.write_text(plan.source_content)
+        plan.original_path.write_text(plan.original_content)
         plan.canonical_path.write_text(json.dumps(package.document.to_dict(), ensure_ascii=False, indent=2) + "\n")
         if plan.translation_path:
             plan.translation_path.parent.mkdir(exist_ok=True)
@@ -146,3 +192,43 @@ class DatedNotesArchiveAdapter:
         if plan.raw_path:
             plan.raw_path.parent.mkdir(exist_ok=True)
             plan.raw_path.write_text((package.root / "raw" / "source.html").read_text())
+
+    def refresh(self, plan: NotesArchivePlan, package: CanonicalPackage) -> None:
+        """Refresh generated files after verifying the archive document identity."""
+        if not plan.article_dir.is_dir() or not plan.canonical_path.is_file():
+            raise FileNotFoundError(f"archive target does not exist: {plan.article_dir}")
+        existing = json.loads(plan.canonical_path.read_text())
+        if existing.get("document_id") != package.document.document_id:
+            raise ValueError(
+                f"archive target belongs to {existing.get('document_id')!r}, "
+                f"not {package.document.document_id!r}"
+            )
+
+        files = {
+            plan.source_path: plan.source_content,
+            plan.original_path: plan.original_content,
+            plan.canonical_path: json.dumps(package.document.to_dict(), ensure_ascii=False, indent=2) + "\n",
+            plan.metadata_path: plan.metadata_content,
+            plan.index_path: plan.index_content,
+        }
+        if plan.translation_path:
+            files[plan.translation_path] = plan.translation_content
+        if plan.editorial_path:
+            files[plan.editorial_path] = plan.editorial_content
+        if plan.bilingual_path:
+            files[plan.bilingual_path] = plan.bilingual_content
+        if plan.raw_path:
+            files[plan.raw_path] = (package.root / "raw" / "source.html").read_text()
+
+        staged: list[tuple[Path, Path]] = []
+        try:
+            for target, content in files.items():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temporary = target.with_suffix(target.suffix + ".tmp")
+                temporary.write_text(content)
+                staged.append((temporary, target))
+            for temporary, target in staged:
+                temporary.replace(target)
+        finally:
+            for temporary, _ in staged:
+                temporary.unlink(missing_ok=True)

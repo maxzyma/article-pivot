@@ -112,6 +112,16 @@ def is_pseudo_table(block: Block) -> bool:
     return len(rows) >= 2 and all(line.startswith("|") and line.endswith("|") for line in rows)
 
 
+def is_orphan_table_separator(block: Block) -> bool:
+    if block.type != "paragraph":
+        return False
+    text = render_inlines(block.inlines).strip()
+    if not (text.startswith("|") and text.endswith("|")):
+        return False
+    cells = [value.strip() for value in text.strip("|").split("|")]
+    return len(cells) >= 2 and all(re.fullmatch(r"[-–—]{3,}", value) for value in cells)
+
+
 def _render_pseudo_table(block: Block) -> str:
     rows = [
         line.strip()
@@ -123,6 +133,58 @@ def _render_pseudo_table(block: Block) -> str:
     if len(rows) == 1 or not re.fullmatch(r"\|(?:\s*:?-+:?\s*\|)+", rows[1]):
         rows.insert(1, separator)
     return "\n".join(rows)
+
+
+def _quote_table_rows(headers: list[str], rows: list[list[str]]) -> str:
+    """Render an original-language table as quote-safe semantic rows."""
+    if not headers:
+        return ""
+
+    def normalize_cell(value: str) -> str:
+        return re.sub(
+            r"(?<!\\)\$(?!\$)\s*(.+?)\s*(?<!\\)\$",
+            lambda match: f"${match.group(1).strip()}$",
+            value,
+        )
+
+    def normalize_header(value: str) -> str:
+        value = normalize_cell(value.strip())
+        match = re.fullmatch(r"\*\*(.+)\*\*", value)
+        return match.group(1) if match else value
+
+    quoted_rows: list[str] = []
+    for row in rows:
+        fields = []
+        for index, header in enumerate(headers):
+            value = normalize_cell(row[index] if index < len(row) else "")
+            header = normalize_header(header)
+            fields.append(f"**{header}：** {value}" if header else value)
+        quoted_rows.append(_quote("  \n".join(fields)))
+    return "\n\n".join(quoted_rows)
+
+
+def _render_original_table(block: Block) -> str:
+    headers = [str(value) for value in block.attrs.get("headers", [])]
+    rows = [[str(value) for value in row] for row in block.attrs.get("rows", [])]
+    return _quote_table_rows(headers, rows)
+
+
+def _render_original_pseudo_table(block: Block) -> str:
+    lines = [
+        line.strip()
+        for line in _render_pseudo_table(block).splitlines()
+        if line.strip()
+    ]
+    if len(lines) < 2:
+        return _quote("\n".join(lines))
+
+    def cells(line: str) -> list[str]:
+        return [
+            value.strip().replace(r"\|", "|")
+            for value in re.split(r"(?<!\\)\|", line.strip("|"))
+        ]
+
+    return _quote_table_rows(cells(lines[0]), [cells(line) for line in lines[2:]])
 
 
 def display_math_latex(block: Block) -> str | None:
@@ -187,6 +249,8 @@ def _has_inline_type(block: Block, node_type: str) -> bool:
 
 
 def _render_block(block: Block, heading_offset: int, in_quote: bool = False) -> str:
+    if is_orphan_table_separator(block):
+        return ""
     if is_pseudo_table(block):
         return _render_pseudo_table(block)
     display_latex = display_math_latex(block)
@@ -262,6 +326,8 @@ def _apply_overlay(block: Block, overlay: TranslationOverlay) -> Block:
 
 
 def _render_publication_entry(original: Block, translated: Block | None) -> list[str]:
+    if is_orphan_table_separator(original):
+        return []
     if (
         translated is None
         or original.type in {"code", "math", "image", "divider"}
@@ -274,8 +340,10 @@ def _render_publication_entry(original: Block, translated: Block | None) -> list
         return [translated_text, _quote(render_inlines(original.inlines))]
     if original.type == "list":
         return [translated_text, _render_original_list(original, 2)]
+    if original.type == "table":
+        return [translated_text, _render_original_table(original)]
     if is_pseudo_table(original):
-        return [translated_text, _quote(original_text)]
+        return [translated_text, _render_original_pseudo_table(original)]
     if original.type == "blockquote":
         if _has_inline_math(original):
             translated_body = "\n\n".join(
@@ -350,6 +418,8 @@ def render_bilingual_markdown(
     if overlay and title != original_title:
         parts.append(_quote(original_title))
     for block in package.document.blocks:
+        if is_orphan_table_separator(block):
+            continue
         has_translation = overlay and any(item.id in overlay.segments for item in block.walk())
         if has_translation and block.type not in {"code", "math", "image", "divider"}:
             translated_block = _apply_overlay(block, overlay)
@@ -359,6 +429,10 @@ def render_bilingual_markdown(
                 parts.append(_quote(render_inlines(block.inlines)))
             elif block.type == "list":
                 parts.append(_render_original_list(block, heading_offset))
+            elif block.type == "table":
+                parts.append(_render_original_table(block))
+            elif is_pseudo_table(block):
+                parts.append(_render_original_pseudo_table(block))
             else:
                 parts.append(_quote(original))
         else:

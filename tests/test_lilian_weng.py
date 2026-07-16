@@ -138,8 +138,9 @@ class LilianWengAdapterTests(unittest.TestCase):
             package = CanonicalPackage(Path(temp), document, {"zh-CN": overlay})
             markdown = render_bilingual_markdown(package)
             self.assertIn("| 分组 | 工具 |", markdown)
-            self.assertIn("> **Group：** IO", markdown)
-            self.assertIn("> **Tools：** read, write", markdown)
+            self.assertIn("> 英文原表 / English original", markdown)
+            self.assertIn("| Group | Tools |", markdown)
+            self.assertIn("| IO | read, write |", markdown)
             self.assertNotIn("> | Group | Tools |", markdown)
 
     def test_notes_archive_dry_plan_uses_published_date(self):

@@ -135,56 +135,12 @@ def _render_pseudo_table(block: Block) -> str:
     return "\n".join(rows)
 
 
-def _quote_table_rows(headers: list[str], rows: list[list[str]]) -> str:
-    """Render an original-language table as quote-safe semantic rows."""
-    if not headers:
-        return ""
-
-    def normalize_cell(value: str) -> str:
-        return re.sub(
-            r"(?<!\\)\$(?!\$)\s*(.+?)\s*(?<!\\)\$",
-            lambda match: f"${match.group(1).strip()}$",
-            value,
-        )
-
-    def normalize_header(value: str) -> str:
-        value = normalize_cell(value.strip())
-        match = re.fullmatch(r"\*\*(.+)\*\*", value)
-        return match.group(1) if match else value
-
-    quoted_rows: list[str] = []
-    for row in rows:
-        fields = []
-        for index, header in enumerate(headers):
-            value = normalize_cell(row[index] if index < len(row) else "")
-            header = normalize_header(header)
-            fields.append(f"**{header}：** {value}" if header else value)
-        quoted_rows.append(_quote("  \n".join(fields)))
-    return "\n\n".join(quoted_rows)
-
-
 def _render_original_table(block: Block) -> str:
-    headers = [str(value) for value in block.attrs.get("headers", [])]
-    rows = [[str(value) for value in row] for row in block.attrs.get("rows", [])]
-    return _quote_table_rows(headers, rows)
+    return _quote("英文原表 / English original") + "\n\n" + _render_block(block, 2)
 
 
 def _render_original_pseudo_table(block: Block) -> str:
-    lines = [
-        line.strip()
-        for line in _render_pseudo_table(block).splitlines()
-        if line.strip()
-    ]
-    if len(lines) < 2:
-        return _quote("\n".join(lines))
-
-    def cells(line: str) -> list[str]:
-        return [
-            value.strip().replace(r"\|", "|")
-            for value in re.split(r"(?<!\\)\|", line.strip("|"))
-        ]
-
-    return _quote_table_rows(cells(lines[0]), [cells(line) for line in lines[2:]])
+    return _quote("英文原表 / English original") + "\n\n" + _render_pseudo_table(block)
 
 
 def display_math_latex(block: Block) -> str | None:

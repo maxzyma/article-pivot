@@ -10,7 +10,6 @@ from article_pivot.adapters.archive import DatedNotesArchiveAdapter
 from article_pivot.package import CanonicalPackage
 from article_pivot.renderers import (
     _quote,
-    _quote_table_rows,
     normalize_display_math,
     render_bilingual_markdown,
 )
@@ -55,11 +54,6 @@ class PivotRegressionTests(unittest.TestCase):
 
     def test_quoted_markdown_list_marker_is_visible_in_dingtalk(self):
         self.assertEqual("> • nested item", _quote("  - nested item"))
-
-    def test_quoted_table_trims_math_delimiter_whitespace(self):
-        rendered = _quote_table_rows(["Symbol", "Value"], [["$ n $", "$ G_t^{(n)} $"]])
-        self.assertIn("> **Symbol：** $n$", rendered)
-        self.assertIn("> **Value：** $G_t^{(n)}$", rendered)
 
     def test_publication_document_owns_shared_title_and_metadata(self):
         publication = build_publication_document(self.package)

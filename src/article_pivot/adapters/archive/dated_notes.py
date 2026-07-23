@@ -56,7 +56,7 @@ class NotesArchivePlan:
     editorial_path: Path | None
     raw_path: Path | None
     metadata_path: Path
-    index_path: Path
+    index_path: Path | None
     source_content: str
     original_content: str
     bilingual_content: str
@@ -76,16 +76,27 @@ class NotesArchivePlan:
             "editorial_path": str(self.editorial_path) if self.editorial_path else None,
             "raw_path": str(self.raw_path) if self.raw_path else None,
             "metadata_path": str(self.metadata_path),
-            "index_path": str(self.index_path),
+            "index_path": str(self.index_path) if self.index_path else None,
         }
 
 
 class DatedNotesArchiveAdapter:
-    def __init__(self, root: str | Path):
+    def __init__(
+        self,
+        root: str | Path,
+        *,
+        source_label: str = "Lil'Log / Lilian Weng",
+        maintain_index: bool = True,
+    ):
         self.root = Path(root).resolve()
+        self.source_label = source_label
+        # When False the adapter writes only the self-contained package and skips
+        # the per-root article-index.md (used by sources whose index lives
+        # elsewhere, e.g. the claude-blog Jekyll collection built from packages).
+        self.maintain_index = maintain_index
 
     def plan(self, package: CanonicalPackage, locale: str = "zh-CN") -> NotesArchivePlan:
-        if not (self.root / "article-index.md").is_file():
+        if self.maintain_index and not (self.root / "article-index.md").is_file():
             raise ValueError(f"not a dated article archive: {self.root}")
         document = package.document
         date = datetime.fromisoformat(document.source["published_at"].replace("Z", "+00:00")).date()
@@ -117,35 +128,38 @@ class DatedNotesArchiveAdapter:
             "editorial_file": f"./editorial/{locale}.json" if editorial else None,
             "publication_profile": editorial.profile if editorial else None,
         }
-        index_path = self.root / "article-index.md"
-        relative_link = (article_dir / f"{slug}.md").relative_to(self.root).as_posix()
-        row = f"| {date:%m-%d} | [{display_title}]({relative_link}) | Lil'Log / Lilian Weng | `{slug}/` |"
-        lines = index_path.read_text().splitlines()
-        month_header = f"## {date:%Y-%m}"
-        if any(relative_link in line for line in lines):
-            index_content = "\n".join(lines) + "\n"
-        elif month_header in lines:
-            header_index = lines.index(month_header)
-            separator_index = next(
-                index
-                for index in range(header_index + 1, len(lines))
-                if lines[index].startswith("|---") or lines[index].startswith("|------")
-            )
-            lines.insert(separator_index + 1, row)
-            index_content = "\n".join(lines) + "\n"
-        else:
-            section = [
-                "",
-                month_header,
-                "",
-                "| 日期 | 标题 | 来源 | 文件路径 |",
-                "|------|------|------|----------|",
-                row,
-            ]
-            divider = lines.index("---") + 1 if "---" in lines else len(lines)
-            lines[divider:divider] = section
-            index_content = "\n".join(lines) + "\n"
-        index_content = "\n".join(_sort_month_sections(index_content.splitlines())) + "\n"
+        index_path: Path | None = None
+        index_content = ""
+        if self.maintain_index:
+            index_path = self.root / "article-index.md"
+            relative_link = (article_dir / f"{slug}.md").relative_to(self.root).as_posix()
+            row = f"| {date:%m-%d} | [{display_title}]({relative_link}) | {self.source_label} | `{slug}/` |"
+            lines = index_path.read_text().splitlines()
+            month_header = f"## {date:%Y-%m}"
+            if any(relative_link in line for line in lines):
+                index_content = "\n".join(lines) + "\n"
+            elif month_header in lines:
+                header_index = lines.index(month_header)
+                separator_index = next(
+                    index
+                    for index in range(header_index + 1, len(lines))
+                    if lines[index].startswith("|---") or lines[index].startswith("|------")
+                )
+                lines.insert(separator_index + 1, row)
+                index_content = "\n".join(lines) + "\n"
+            else:
+                section = [
+                    "",
+                    month_header,
+                    "",
+                    "| 日期 | 标题 | 来源 | 文件路径 |",
+                    "|------|------|------|----------|",
+                    row,
+                ]
+                divider = lines.index("---") + 1 if "---" in lines else len(lines)
+                lines[divider:divider] = section
+                index_content = "\n".join(lines) + "\n"
+            index_content = "\n".join(_sort_month_sections(index_content.splitlines())) + "\n"
         return NotesArchivePlan(
             article_dir=article_dir,
             source_path=article_dir / f"{slug}.md",
@@ -186,7 +200,8 @@ class DatedNotesArchiveAdapter:
             plan.editorial_path.parent.mkdir(exist_ok=True)
             plan.editorial_path.write_text(plan.editorial_content)
         plan.metadata_path.write_text(plan.metadata_content)
-        plan.index_path.write_text(plan.index_content)
+        if plan.index_path:
+            plan.index_path.write_text(plan.index_content)
         if plan.bilingual_path:
             plan.bilingual_path.write_text(plan.bilingual_content)
         if plan.raw_path:
@@ -209,8 +224,9 @@ class DatedNotesArchiveAdapter:
             plan.original_path: plan.original_content,
             plan.canonical_path: json.dumps(package.document.to_dict(), ensure_ascii=False, indent=2) + "\n",
             plan.metadata_path: plan.metadata_content,
-            plan.index_path: plan.index_content,
         }
+        if plan.index_path:
+            files[plan.index_path] = plan.index_content
         if plan.translation_path:
             files[plan.translation_path] = plan.translation_content
         if plan.editorial_path:

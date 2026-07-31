@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from .adapters.archive import DatedNotesArchiveAdapter, TrendingDigestArchiveAdapter
-from .adapters.source import LilianWengAdapter, LilianWengDiscovery
+from .adapters.source import ClaudeBlogAdapter, ClaudeBlogDiscovery, LilianWengAdapter, LilianWengDiscovery
 from .package import CanonicalPackage
 from .renderers import render_bilingual_markdown
 from .validation import validate_document
@@ -39,6 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("url")
     fetch.add_argument("--output", required=True)
 
+    discover_cb = commands.add_parser("discover-claude-blog", help="discover Claude Blog posts from listing page")
+    discover_cb.add_argument("--url", default="https://claude.com/blog")
+    discover_cb.add_argument("--known-url", action="append", default=[])
+
+    fetch_cb = commands.add_parser("fetch-claude-blog", help="fetch a Claude Blog post into a canonical package")
+    fetch_cb.add_argument("url")
+    fetch_cb.add_argument("--output", required=True)
+
     initialize = commands.add_parser("init-translation", help="create a pending translation overlay")
     initialize.add_argument("package")
     initialize.add_argument("--locale", default="zh-CN")
@@ -62,6 +70,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "fetch-lilian":
         adapter = LilianWengAdapter()
+        snapshot = adapter.fetch(args.url)
+        document = adapter.parse(snapshot)
+        adapter.validate(document).require_ok()
+        package = CanonicalPackage.write(args.output, document, raw_html=snapshot.html)
+        print(json.dumps({"package": str(package.root), "document_id": document.document_id, "source_hash": document.revision["source_hash"], "blocks": len(document.all_blocks()), "assets": len(document.assets)}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "discover-claude-blog":
+        discovery = ClaudeBlogDiscovery()
+        items = discovery.discover(discovery.fetch(args.url), known_urls=args.known_url)
+        print(json.dumps({"items": [item.to_dict() for item in items]}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "fetch-claude-blog":
+        adapter = ClaudeBlogAdapter()
         snapshot = adapter.fetch(args.url)
         document = adapter.parse(snapshot)
         adapter.validate(document).require_ok()

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Iterable
 from urllib.parse import urljoin, urlparse
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 
 from ...model import Block, CanonicalDocument, InlineNode
 from ...validation import ValidationIssue, ValidationReport, validate_document
@@ -277,6 +277,13 @@ class ClaudeBlogAdapter:
 
     def parse(self, snapshot: RawSnapshot) -> CanonicalDocument:
         soup = BeautifulSoup(snapshot.html, "html.parser")
+        # claude.com serves React streaming SSR markup whose Suspense boundary
+        # markers (<!--$-->, <!--/$-->, <!--$!-->) are HTML comments. They wrap
+        # inline <br/> nodes, so BeautifulSoup's get_text would otherwise surface
+        # their "$"/"/$" payload as literal text and corrupt the canonical body
+        # (and get misread as LaTeX by downstream renderers). Strip them first.
+        for comment in soup.find_all(string=lambda s: isinstance(s, Comment)):
+            comment.extract()
         h1 = soup.find("h1")
         title = h1.get_text(" ", strip=True) if h1 else ""
 

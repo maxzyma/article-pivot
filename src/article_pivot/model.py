@@ -209,6 +209,7 @@ class EditorialOverlay:
     key_points: tuple[str, ...]
     glossary: tuple[GlossaryEntry, ...]
     source_label: str = ""
+    summary: str = ""
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "EditorialOverlay":
@@ -220,6 +221,7 @@ class EditorialOverlay:
             key_points=tuple(value.get("key_points", [])),
             glossary=tuple(GlossaryEntry.from_dict(item) for item in value.get("glossary", [])),
             source_label=value.get("source_label", ""),
+            summary=value.get("summary", ""),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -228,6 +230,7 @@ class EditorialOverlay:
             "source_revision": self.source_revision,
             "profile": self.profile,
             "category": self.category,
+            "summary": self.summary,
             "source_label": self.source_label,
             "key_points": list(self.key_points),
             "glossary": [entry.to_dict() for entry in self.glossary],

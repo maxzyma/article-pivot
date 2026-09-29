@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 
 from ...model import Block, CanonicalDocument, InlineNode
 from ...validation import ValidationIssue, ValidationReport, validate_document
+from .lists import list_attrs, merge_adjacent_ordered_lists
 
 
 DEFAULT_FEED = "https://lilianweng.github.io/index.xml"
@@ -202,7 +203,9 @@ class LilianWengAdapter:
         author_meta = soup.select_one('meta[name="author"]')
         published_at = published_meta.get("content", "") if published_meta else ""
         factory = _IdFactory()
-        blocks = tuple(self._parse_children(content, snapshot.url, factory))
+        blocks = merge_adjacent_ordered_lists(
+            tuple(self._parse_children(content, snapshot.url, factory))
+        )
         math_nodes = [
             node
             for node in content.find_all("div")
@@ -334,7 +337,7 @@ class LilianWengAdapter:
             list_block = Block(
                 factory.make("list", text),
                 "list",
-                attrs={"ordered": name == "ol"},
+                attrs=list_attrs(name, element),
                 children=tuple(items),
             )
             return (list_block, *embedded_blocks) if embedded_blocks else list_block

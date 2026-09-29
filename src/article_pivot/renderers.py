@@ -82,13 +82,20 @@ def _quote(text: str) -> str:
 
 
 def _quote_list(block: Block) -> str:
-    """Render quoted list items as text bullets that DingTalk keeps visible."""
+    """Render quoted list markers as text DingTalk keeps visible.
+
+    Bullets stay literal glyphs and ordered markers use an escaped dot, so the
+    original numbering survives without DingTalk re-numbering the quote.
+    """
     lines: list[str] = []
 
     def append_items(current: Block, depth: int = 0) -> None:
+        ordered = bool(current.attrs.get("ordered"))
         bullet = "•" if depth == 0 else "◦"
-        for child in current.children:
-            lines.append(_quote(f"{bullet} {render_inlines(child.inlines)}"))
+        start = _list_start(current)
+        for offset, child in enumerate(current.children):
+            marker = f"{start + offset}\\." if ordered else bullet
+            lines.append(_quote(f"{marker} {render_inlines(child.inlines)}"))
             for nested in child.children:
                 if nested.type == "list":
                     append_items(nested, depth + 1)
@@ -96,6 +103,14 @@ def _quote_list(block: Block) -> str:
     append_items(block)
     has_nested = any(child.children for child in block.children)
     return ("\n\n" if _has_inline_math(block) or has_nested else "\n").join(lines)
+
+
+def _list_start(block: Block) -> int:
+    """First marker number of an ordered list; publishers may not start at 1."""
+    try:
+        return int(block.attrs.get("start", 1))
+    except (TypeError, ValueError):
+        return 1
 
 
 def _render_original_list(block: Block, heading_offset: int) -> str:
@@ -247,7 +262,7 @@ def _render_block(block: Block, heading_offset: int, in_quote: bool = False) -> 
         ordered = bool(block.attrs.get("ordered"))
         paragraph_list = _has_inline_math(block)
         lines = []
-        for index, child in enumerate(block.children, start=1):
+        for index, child in enumerate(block.children, start=_list_start(block)):
             marker = (
                 f"{index}\\."
                 if ordered and paragraph_list
@@ -396,14 +411,17 @@ def render_bilingual_markdown(
     return "\n\n".join(part for part in parts if part).rstrip() + "\n"
 
 
-def render_source_markdown(package: CanonicalPackage, heading_offset: int = 1) -> str:
+def render_source_markdown(
+    package: CanonicalPackage, heading_offset: int = 1, source_label: str = ""
+) -> str:
     validate_document(package.document).require_ok()
     source = package.document.source
     published = str(source.get("published_at", ""))[:10]
+    label = source_label or f"Lil'Log / {source.get('author', 'Lilian Weng')}"
     parts = [
         f"# {package.document.title_en or package.document.title}",
         _quote(
-            f"来源：Lil'Log / {source.get('author', 'Lilian Weng')}，{published}\n"
+            f"来源：{label}，{published}\n"
             f"原文链接：{source.get('canonical_url', '')}"
         ),
     ]

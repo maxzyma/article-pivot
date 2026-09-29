@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "maxzyma" }]
-dependencies = ["beautifulsoup4>=4.12,<5"]
+dependencies = ["beautifulsoup4>=4.12,<5", "markdown-it-py>=3,<5"]
 
 [project.scripts]
 article-pivot = "article_pivot.cli:main"

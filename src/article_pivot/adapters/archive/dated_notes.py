@@ -107,7 +107,7 @@ class DatedNotesArchiveAdapter:
         display_title = overlay.title if overlay and overlay.title else document.title
         bilingual_path = article_dir / f"{slug}-bilingual.md" if overlay else None
         raw_source = package.root / "raw" / "source.html"
-        source_markdown = render_source_markdown(package)
+        source_markdown = render_source_markdown(package, source_label=self.source_label)
         publication_markdown = render_bilingual_markdown(package, locale) if overlay else source_markdown
         metadata = {
             "schema_version": "article-archive.v1",

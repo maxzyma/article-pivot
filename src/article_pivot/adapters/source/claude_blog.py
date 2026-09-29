@@ -16,6 +16,7 @@ from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 from ...model import Block, CanonicalDocument, InlineNode
 from ...validation import ValidationIssue, ValidationReport, validate_document
 from .lilian_weng import DiscoveryItem, RawSnapshot
+from .lists import list_attrs, merge_adjacent_ordered_lists
 
 
 BLOG_URL = "https://claude.com/blog"
@@ -330,6 +331,8 @@ class ClaudeBlogAdapter:
                         intro_count += 1
                     blocks.append(block)
 
+        blocks = list(merge_adjacent_ordered_lists(blocks))
+
         total_text = sum(
             len(_plain_text(b.inlines))
             for b in blocks
@@ -428,7 +431,14 @@ class ClaudeBlogAdapter:
             items: list[Block] = []
             for li in element.find_all("li", recursive=False):
                 inlines = _inline_nodes(li, base_url)
-                nested_children: list[Block] = []
+                # Images inside a list item (e.g. a screenshot under a numbered
+                # step) are not inline text; keep them as nested image blocks.
+                nested_children: list[Block] = [
+                    image
+                    for img in li.find_all("img")
+                    if img.find_parent(["ul", "ol"]) is element
+                    and (image := self._parse_block(img, base_url, factory)) is not None
+                ]
                 for nested_list in li.find_all(["ul", "ol"], recursive=False):
                     nested_block = self._parse_block(nested_list, base_url, factory)
                     if isinstance(nested_block, list):
@@ -441,7 +451,7 @@ class ClaudeBlogAdapter:
             if not items:
                 return None
             return Block(
-                factory.next(), "list", attrs={"ordered": name == "ol"}, children=tuple(items)
+                factory.next(), "list", attrs=list_attrs(name, element), children=tuple(items)
             )
 
         if name == "blockquote":

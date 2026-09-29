@@ -76,9 +76,9 @@ metadata, key points, body, and glossary. Platform publishers must derive from
 that publication document and limit changes to target capability adaptations.
 The notes adapter refuses to overwrite an existing article directory.
 
-New Lilian Weng posts use this flow. Claude Blog remains on its legacy
-`claude-blog-digest` producer until that source completes separate migration
-gates; these commands do not change its scheduler or production writer.
+All supported sources — new Lilian Weng posts, Claude Blog and Manus Blog —
+use this flow through their own source adapters. Scheduling, credentials, run state, and
+delivery stay with the caller; these commands change none of them.
 
 ## Repository boundary
 

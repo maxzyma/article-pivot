@@ -19,8 +19,13 @@ from .lilian_weng import DiscoveryItem, RawSnapshot
 from .lists import list_attrs, merge_adjacent_ordered_lists
 
 
-BLOG_URL = "https://claude.com/blog"
-ALLOWED_HOST = "claude.com"
+# claude.com/blog now redirects here; posts moved from /blog/<slug> to /resources/articles/<slug>.
+BLOG_URL = "https://claude.com/resources/articles"
+POST_PREFIXES = {
+    "claude.com": ("/blog/", "/resources/articles/"),
+    "www.claude.com": ("/blog/", "/resources/articles/"),
+    "claude.dev": ("/blog/",),
+}
 DATE_RE = re.compile(
     r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},\s+20\d{2}",
     re.I,
@@ -33,7 +38,31 @@ KNOWN_CATEGORIES = [
     "Product",
     "Research",
     "Company",
+    "Announcements",
+    "Best practices",
+    "Perspectives",
+    "Insights",
 ]
+
+
+def _is_post_url(url: str) -> bool:
+    """Claude posts, including Claude developer blog posts listed alongside them."""
+    parsed = urlparse(url)
+    return any(
+        parsed.path.startswith(prefix)
+        and parsed.path.removeprefix(prefix).strip("/")
+        and "/" not in parsed.path.removeprefix(prefix).strip("/")
+        for prefix in POST_PREFIXES.get(parsed.netloc, ())
+    )
+
+
+def url_aliases(url: str) -> set[str]:
+    """The same claude.com post under its old /blog/ and current /resources/articles/ path."""
+    parsed = urlparse(url)
+    if parsed.netloc not in {"claude.com", "www.claude.com"} or not _is_post_url(url):
+        return {url}
+    slug = parsed.path.rstrip("/").rsplit("/", 1)[-1]
+    return {url} | {f"https://claude.com{prefix}{slug}" for prefix in POST_PREFIXES["claude.com"]}
 
 
 def _slug_from_url(url: str) -> str:
@@ -163,14 +192,14 @@ class ClaudeBlogDiscovery:
     def discover(
         self, page_html: str, known_urls: Iterable[str] = ()
     ) -> tuple[DiscoveryItem, ...]:
-        known = set(known_urls)
+        known = {alias for url in known_urls for alias in url_aliases(url)}
         soup = BeautifulSoup(page_html, "html.parser")
         by_url: dict[str, dict] = {}
 
-        for anchor in soup.select('a[href*="/blog/"]'):
+        for anchor in soup.select('a[href*="/blog/"], a[href*="/resources/articles/"]'):
             href = anchor.get("href") or ""
             url = urljoin(BLOG_URL, href)
-            if "/blog/category/" in url:
+            if not _is_post_url(url):
                 continue
             slug = _slug_from_url(url)
             if not slug or slug == "blog":
@@ -178,16 +207,17 @@ class ClaudeBlogDiscovery:
             if url in known:
                 continue
 
+            # The nearest element carrying a date is the card; a card may be the
+            # anchor itself, and walking past it would pick a sibling's title.
             block = None
             parent = anchor
-            for _ in range(10):
-                parent = parent.parent
+            for _ in range(11):
                 if parent is None:
                     break
-                text = parent.get_text(" ", strip=True)
-                if DATE_RE.search(text):
+                if DATE_RE.search(parent.get_text(" ", strip=True)):
                     block = parent
                     break
+                parent = parent.parent
             if block is None:
                 continue
 
@@ -256,14 +286,7 @@ class ClaudeBlogDiscovery:
 
 class ClaudeBlogAdapter:
     def match(self, url: str) -> bool:
-        parsed = urlparse(url)
-        return (
-            parsed.scheme == "https"
-            and parsed.netloc == ALLOWED_HOST
-            and parsed.path.startswith("/blog/")
-            and parsed.path != "/blog/"
-            and "/blog/category/" not in parsed.path
-        )
+        return urlparse(url).scheme == "https" and _is_post_url(url)
 
     def fetch(self, url: str) -> RawSnapshot:
         if not self.match(url):
@@ -294,7 +317,7 @@ class ClaudeBlogAdapter:
             if len(node.get_text(" ", strip=True)) >= 50
         ]
         if not body_nodes:
-            candidates = soup.select(".w-richtext")
+            candidates = soup.select(".w-richtext") or soup.select(".prose")
             body = (
                 max(candidates, key=lambda e: len(e.get_text(" ", strip=True)))
                 if candidates
@@ -491,6 +514,7 @@ class ClaudeBlogAdapter:
             src = img.get("src") or img.get("data-src") or ""
             if not src or "placeholder.svg" in src:
                 return None
+            src = urljoin(base_url, src)
             alt = re.sub(r"\s+", " ", img.get("alt") or "").strip()
             caption = element.find("figcaption")
             if not alt and caption:
@@ -501,6 +525,7 @@ class ClaudeBlogAdapter:
             src = element.get("src") or element.get("data-src") or ""
             if not src or "placeholder.svg" in src:
                 return None
+            src = urljoin(base_url, src)
             alt = re.sub(r"\s+", " ", element.get("alt") or "").strip()
             return Block(factory.next(), "image", attrs={"url": src, "alt": alt})
 
@@ -518,7 +543,7 @@ class ClaudeBlogAdapter:
         if name == "hr":
             return Block(factory.next(), "divider")
 
-        if name == "div":
+        if name in {"div", "section"}:
             results: list[Block] = []
             for child in element.children:
                 if not isinstance(child, Tag):
@@ -579,9 +604,10 @@ class ClaudeBlogAdapter:
         ):
             item = caption.parent.find_parent("li") if caption.parent else None
             if item:
+                # Old pages link /blog/category/<x>; resources pages link /resources/<x>.
                 categories = [
                     re.sub(r"\s+", " ", a.get_text(" ", strip=True)).strip()
-                    for a in item.select('a[href*="/blog/category/"]')
+                    for a in item.select('a[href*="/blog/category/"], a[href*="/resources/"]')
                     if a.get_text(" ", strip=True)
                 ]
                 if categories:

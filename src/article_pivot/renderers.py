@@ -251,6 +251,11 @@ def _render_block(block: Block, heading_offset: int, in_quote: bool = False) -> 
             headers = ["" for _ in rows[0]]
         if not headers:
             return ""
+        # A spanning title header has fewer cells than the rows; Markdown drops
+        # every cell beyond the header width, so pad everything to the widest.
+        width = max(len(headers), *(len(row) for row in rows)) if rows else len(headers)
+        headers = headers + [""] * (width - len(headers))
+        rows = [row + [""] * (width - len(row)) for row in rows]
         escape = lambda value: value.replace("|", "\\|").replace("\n", "<br />")
         output = [
             "| " + " | ".join(escape(value) for value in headers) + " |",

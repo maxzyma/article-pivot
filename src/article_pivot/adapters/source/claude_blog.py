@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import html as html_mod
 import re
-import time
 import urllib.error
 import urllib.request
 from collections import Counter
@@ -14,6 +13,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 
 from ...model import Block, CanonicalDocument, InlineNode
+from ...net import fetch_text
 from ...validation import ValidationIssue, ValidationReport, validate_document
 from .lilian_weng import DiscoveryItem, RawSnapshot
 from .lists import list_attrs, merge_adjacent_ordered_lists
@@ -102,24 +102,11 @@ def _ordered_categories_from_text(text: str, categories: list[str]) -> list[str]
 
 
 def _fetch_text(url: str) -> str:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "article-pivot/0.1 (claude-blog)",
-            "Accept": "text/html,application/xhtml+xml",
-        },
-    )
-    last_error: Exception | None = None
-    for attempt in range(1, 4):
-        try:
-            with urllib.request.urlopen(request, timeout=45) as response:
-                return response.read().decode("utf-8", errors="replace")
-        except (urllib.error.URLError, TimeoutError) as exc:
-            last_error = exc
-            if attempt == 3:
-                break
-            time.sleep(2 * attempt)
-    raise RuntimeError(f"fetch failed after retries: {url}: {last_error}") from last_error
+    try:
+        return fetch_text(url, accept="text/html,application/xhtml+xml",
+                          user_agent="article-pivot/0.1 (claude-blog)")
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+        raise RuntimeError(f"fetch failed after retries: {url}: {exc}") from exc
 
 
 class _SeqIdFactory:

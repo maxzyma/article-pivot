@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Iterable
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from ...model import Block, CanonicalDocument, InlineNode
+from ...net import fetch_text
 from ...validation import ValidationIssue, ValidationReport, validate_document
 from .lists import list_attrs, merge_adjacent_ordered_lists
 
@@ -81,9 +81,7 @@ class _IdFactory:
 
 
 def _fetch_text(url: str, accept: str = "text/html") -> str:
-    request = Request(url, headers={"User-Agent": "article-pivot/0.1", "Accept": accept})
-    with urlopen(request, timeout=30) as response:
-        return response.read().decode(response.headers.get_content_charset() or "utf-8")
+    return fetch_text(url, accept=accept, timeout=30)
 
 
 def _text_nodes(value: str) -> tuple[InlineNode, ...]:

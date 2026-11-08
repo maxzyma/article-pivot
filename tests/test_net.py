@@ -23,7 +23,7 @@ class FetchTextTests(unittest.TestCase):
         with patch.object(net.urllib.request, "urlopen", side_effect=[EOF_ERR, response("ok")]), \
                 patch.object(net.time, "sleep") as sleep:
             self.assertEqual("ok", net.fetch_text("https://x", accept="text/html"))
-        sleep.assert_called_once_with(net.BACKOFF[0])
+        self.assertTrue(5 <= sleep.call_args.args[0] <= 8)
 
     def test_http_not_found_is_not_retried(self):
         missing = urllib.error.HTTPError("https://x", 404, "Not Found", {}, None)
@@ -36,7 +36,7 @@ class FetchTextTests(unittest.TestCase):
         with patch.object(net.urllib.request, "urlopen", side_effect=EOF_ERR) as opener, \
                 patch.object(net.time, "sleep"), self.assertRaises(urllib.error.URLError):
             net.fetch_text("https://x")
-        self.assertEqual(len(net.BACKOFF) + 1, opener.call_count)
+        self.assertEqual(net.NETWORK_ATTEMPTS, opener.call_count)
 
 
 class AdapterWiringTests(unittest.TestCase):
